@@ -1,3 +1,12 @@
+### Introduction ----
+
+library(dplyr)
+df = data_frame(
+  Name = c("Bob","Susan","Mary"),
+  Age = c(43,27,31),
+  Height = c(6.1,5.9,5.0)
+)
+
 ### Read in CSV file ----
 #install.packages('readr')
 library(readr)
@@ -26,11 +35,12 @@ nrow(filteredData)
 hospitalData %>% 
   filter(`Provider State` %in% c("TN","VA","AL","SC","KY") & 
            (`Total Discharges` > 25 | `Total Discharges` <= 10) & 
-           grepl("HOSPITAL",`Provider Name`))
+           grepl("HOSPITAL",`Provider Name`)) %>% 
+  View()
 
 # new data for distinct
 set.seed(2016) # by fixing the random seed, results will be stable
-df = data.frame(
+df = data_frame(
   x = sample(10,500,rep=TRUE), # sample 500 times from 1-10 with replacement
   y = sample(10,500,rep=TRUE),
   z = sample(10,500,rep=TRUE)
@@ -62,6 +72,10 @@ hospitalData %>%
 hospitalData %>% 
   select(-contains("Total")) %>% 
   names()
+hospitalData %>% 
+  select(definition = `DRG Definition`,
+    everything()) %>% 
+  names()
 
 ## Grouping data
 hospitalData %>% 
@@ -73,7 +87,7 @@ hospitalData %>%
   nrow()
 hospitalData %>% 
   group_by(`DRG Definition`,`Provider State`) %>% 
-  sample_n(5,replace=T) %>% 
+  sample_n(5,replace=TRUE) %>% 
   nrow()
 hospitalData %>% 
   group_by(`DRG Definition`,`Provider State`) %>% 
@@ -85,7 +99,8 @@ hospitalData %>%
   group_by(`DRG Definition`,`Provider State`) %>% 
   summarise(nRows = n(),
             averageDischarges = mean(`Total Discharges`)) %>% 
-  head()
+  head() %>% 
+  View()
 
 hospitalData %>% 
   group_by(`DRG Definition`,`Provider State`) %>% 
