@@ -1,0 +1,116 @@
+---
+title: "Hospital Analysis Report"
+author: "Mark Ewing"
+date: "October 10, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(plotly) #interactive graphics
+library(DT) #interactive tables
+library(choroplethr) #choropleth map
+
+library(readxl)
+library(dplyr)
+library(tidyr)
+
+hospitalData = read_excel("excel version.xlsx")
+data(df_pop_state)
+
+match_state = Vectorize(function(x){
+  o = tolower(state.name[which(state.abb == x)])
+  if(length(o) == 0) return(NA) else return(o)
+})
+```
+
+# Inpatient Prospective Payment System
+
+This analysis is based on data containing `r nrow(hospitalData)` rows of data covering `r length(unique(hospitalData[["DRG Definition"]]))` DRG Definitions.
+
+## Where are the most discharges?
+
+```{r, warning=F}
+hospitalData %>% 
+  group_by(`Provider State`) %>% 
+  summarise(discharges = sum(` Total Discharges `)) %>% 
+  mutate(region = unlist(match_state(`Provider State`))) %>% 
+  left_join(df_pop_state,by=c("region")) %>% 
+  mutate(value = discharges/value*1000) %>% 
+  state_choropleth(title="Discharges per 1000 People by State")
+```
+
+The West Coast has significantly fewer discharges on a per capita basis while the Midwest and the South have higher rates.
+
+### Provider discharges
+
+```{r}
+hospitalData %>% 
+  mutate(totalMedicare = `Average Medicare Payments`*` Total Discharges `) %>% 
+  group_by(`Provider Name`,`Provider State`) %>% 
+  summarise(`Total Medicare Payments` = sum(totalMedicare),
+    `Discharges` = sum(` Total Discharges `)) %>% 
+  ungroup() %>% 
+  plot_ly(y = `Total Medicare Payments`, x = Discharges, text = `Provider Name`, mode = 'markers')
+```
+
+We can see from this graph that the average Medicare payment of a discharge is about $10,000.  Some providers like Florida Hospital are lower while the New York Presbyterian Hospital are higher.
+
+```{r}
+hospitalData %>% 
+  mutate(totalMedicare = `Average Medicare Payments`*` Total Discharges `) %>% 
+  group_by(`Provider Name`,`Provider State`) %>% 
+  summarise(`Total Medicare Payments` = sum(totalMedicare),
+    `Discharges` = sum(` Total Discharges `)) %>% 
+  ungroup() %>% 
+  arrange(desc(Discharges)) %>% 
+  datatable() %>% 
+  formatCurrency('Total Medicare Payments') %>% 
+  formatCurrency('Discharges','',digits=0) #formatting numbers with thousands commas
+```
+
+## Inpatient Codes
+
+```{r}
+hospitalData %>% 
+  mutate(DRG = gsub("^[0-9]+ \\- | W/?O?.*CC$","",`DRG Definition`)) %>% 
+  group_by(DRG) %>% 
+  summarise(Discharges = sum(` Total Discharges `),
+    `Maximum Payment` = max(` Average Total Payments `)) %>% 
+  arrange(desc(`Discharges`)) %>% 
+  datatable() %>% 
+  formatCurrency('Maximum Payment') %>% 
+  formatCurrency('Discharges','',digits=0) #formatting numbers with thousands commas
+```
+
+These codes have been collapsed to eliminate slight variations on treatments (e.g. with and without MCC/CC)
+
+### Top 5 Codes
+
+```{r}
+hospitalData %>% 
+  mutate(DRG = gsub("^[0-9]+ \\- | W/?O?.*CC$","",`DRG Definition`)) %>% 
+  group_by(DRG) %>% 
+  summarise(`Payment` = max(` Average Total Payments `),
+    `Covered` = max(` Average Covered Charges `),
+    `Medicare` = max(`Average Medicare Payments`)) %>% 
+  arrange(desc(`Payment`)) %>% 
+  slice(1:5) %>% 
+  gather("Amount Type","Amount",-1) %>% 
+  plot_ly(y = Amount, x = DRG, group = `Amount Type`, type='bar')
+
+```
+
+## Price / Volume
+
+```{r}
+hospitalData %>% 
+  mutate(DRG = gsub("^[0-9]+ \\- | W/?O?.*CC$","",`DRG Definition`)) %>% 
+  group_by(DRG) %>% 
+  summarise(Discharges = sum(` Total Discharges `),
+    `Maximum Payment` = max(` Average Total Payments `)) %>% 
+  plot_ly(y = `Maximum Payment`, x = Discharges, text = DRG, mode='markers')
+```
+
+Most operations follow a typical price-volume curve - more frequent operations cost less due to their more routine nature.  Joint replacements are a bit of an exception (because of the physical cost of the replacement joint?) but otherwise there appear to be a few tiers of of operations, each with their own curve.
